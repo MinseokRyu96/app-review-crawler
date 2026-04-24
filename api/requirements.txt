@@ -1,0 +1,12 @@
+# Vercel 웹 레이어 전용 — Scrapy/Playwright 제외 (워커 전용 패키지)
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+sqlalchemy==2.0.28
+psycopg2-binary==2.9.9
+redis==5.0.3
+celery==5.3.6
+anthropic==0.25.0
+python-dotenv==1.0.1
+pydantic==2.6.3
+aiofiles==23.2.1
+jinja2==3.1.3

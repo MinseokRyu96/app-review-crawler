@@ -1,0 +1,75 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: reviewdb
+      POSTGRES_USER: reviewer
+      POSTGRES_PASSWORD: reviewpass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reviewer"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://reviewer:reviewpass@postgres:5432/reviewdb
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./exports:/app/exports
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: ./backend
+    command: celery -A tasks.celery_app worker --loglevel=info --pool=solo --concurrency=2
+    environment:
+      DATABASE_URL: postgresql://reviewer:reviewpass@postgres:5432/reviewdb
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./exports:/app/exports
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  flower:
+    build: ./backend
+    command: celery -A tasks.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      DATABASE_URL: postgresql://reviewer:reviewpass@postgres:5432/reviewdb
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+
+volumes:
+  postgres_data:
+  redis_data:

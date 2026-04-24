@@ -1,0 +1,50 @@
+databases:
+  - name: review-crawler-db
+    databaseName: reviewdb
+    user: reviewer
+    plan: free
+
+services:
+  - type: web
+    name: review-crawler-backend
+    plan: free
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: review-crawler-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: review-crawler-redis
+          type: redis
+          property: connectionString
+      - key: ANTHROPIC_API_KEY
+        sync: false   # 대시보드에서 직접 입력
+
+  - type: worker
+    name: review-crawler-worker
+    plan: free
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: celery -A tasks.celery_app worker --loglevel=info --pool=solo
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: review-crawler-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: review-crawler-redis
+          type: redis
+          property: connectionString
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+  - type: redis
+    name: review-crawler-redis
+    plan: free
+    ipAllowList: []
