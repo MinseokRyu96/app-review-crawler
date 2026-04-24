@@ -48,7 +48,7 @@ def crawl(request: CrawlRequest):
 
 @router.post("/insights")
 def get_insights(request: InsightsRequest):
-    import google.generativeai as genai
+    import httpx
 
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -60,16 +60,6 @@ def get_insights(request: InsightsRequest):
 
     store_name = "앱스토어" if request.store == "appstore" else "플레이스토어"
     reviews_text = "\n".join(f"[{r['rating']}점] {r['content']}" for r in negative[:80])
-
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction=(
-            "당신은 앱 서비스 개선 전문가입니다. "
-            "사용자 리뷰를 분석해 팀이 바로 행동할 수 있는 구체적인 인사이트를 제공합니다. "
-            "반드시 한국어로 답변하세요."
-        ),
-    )
 
     prompt = (
         f"아래는 {store_name}에 올라온 부정적 리뷰 {len(negative)}개입니다.\n\n"
@@ -83,8 +73,31 @@ def get_insights(request: InsightsRequest):
         "팀이 즉시 실행할 수 있는 3~5가지 액션 아이템"
     )
 
-    response = model.generate_content(prompt)
-    return {"insights": response.text}
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models"
+        f"/gemini-1.5-flash:generateContent?key={api_key}"
+    )
+    payload = {
+        "system_instruction": {
+            "parts": [{"text": (
+                "당신은 앱 서비스 개선 전문가입니다. "
+                "사용자 리뷰를 분석해 팀이 바로 행동할 수 있는 구체적인 인사이트를 제공합니다. "
+                "반드시 한국어로 답변하세요."
+            )}]
+        },
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {"maxOutputTokens": 2048},
+    }
+
+    try:
+        resp = httpx.post(url, json=payload, timeout=55)
+        resp.raise_for_status()
+        text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        return {"insights": text}
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Gemini API 오류: {e.response.text[:200]}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/health")
