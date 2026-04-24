@@ -142,7 +142,7 @@ def run_crawl(self, job_id: str, url: str, count: int):
 
 @celery_app.task(bind=True, name="tasks.crawl_tasks.run_insights")
 def run_insights(self, job_id: str):
-    import anthropic
+    import google.generativeai as genai
 
     db = SessionLocal()
     try:
@@ -165,38 +165,33 @@ def run_insights(self, job_id: str):
             f"[{r.rating}점] {r.content}" for r in negative[:80]
         )
 
-        client = anthropic.Anthropic()
-        msg = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=2048,
-            system=[{
-                "type": "text",
-                "text": (
-                    "당신은 앱 서비스 개선 전문가입니다. "
-                    "사용자 리뷰를 분석해 팀이 바로 행동할 수 있는 구체적인 인사이트를 제공합니다. "
-                    "반드시 한국어로 답변하세요."
-                ),
-                "cache_control": {"type": "ephemeral"},
-            }],
-            messages=[{
-                "role": "user",
-                "content": (
-                    f"아래는 {store_name}에 올라온 부정적 리뷰 {len(negative)}개입니다.\n\n"
-                    f"{reviews_text}\n\n"
-                    "다음 형식으로 분석해 주세요.\n\n"
-                    "## 🔴 핵심 불만 카테고리\n"
-                    "각 카테고리명, 해당 리뷰 비율, 대표 사례 1~2개\n\n"
-                    "## 📌 이슈별 요약\n"
-                    "각 카테고리의 구체적인 문제점\n\n"
-                    "## ✅ 개선 제안 (우선순위 순)\n"
-                    "팀이 즉시 실행할 수 있는 3~5가지 액션 아이템"
-                ),
-            }],
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash",
+            system_instruction=(
+                "당신은 앱 서비스 개선 전문가입니다. "
+                "사용자 리뷰를 분석해 팀이 바로 행동할 수 있는 구체적인 인사이트를 제공합니다. "
+                "반드시 한국어로 답변하세요."
+            ),
         )
+
+        prompt = (
+            f"아래는 {store_name}에 올라온 부정적 리뷰 {len(negative)}개입니다.\n\n"
+            f"{reviews_text}\n\n"
+            "다음 형식으로 분석해 주세요.\n\n"
+            "## 🔴 핵심 불만 카테고리\n"
+            "각 카테고리명, 해당 리뷰 비율, 대표 사례 1~2개\n\n"
+            "## 📌 이슈별 요약\n"
+            "각 카테고리의 구체적인 문제점\n\n"
+            "## ✅ 개선 제안 (우선순위 순)\n"
+            "팀이 즉시 실행할 수 있는 3~5가지 액션 아이템"
+        )
+
+        response = model.generate_content(prompt)
 
         _update_job(
             db, job_id,
-            insights=msg.content[0].text,
+            insights=response.text,
             insights_status="done",
         )
 
