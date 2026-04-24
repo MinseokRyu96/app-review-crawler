@@ -87,7 +87,7 @@ body {
 /* ── Count selector ── */
 .count-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 
-.cnt-btn {
+.cnt-btn, .news-cnt-btn {
   padding: .45rem .9rem;
   border: 2px solid var(--border);
   border-radius: 8px;
@@ -98,8 +98,8 @@ body {
   color: var(--text);
   transition: all .15s;
 }
-.cnt-btn:hover  { border-color: var(--primary); color: var(--primary); }
-.cnt-btn.active { border-color: var(--primary); background: var(--primary); color: #fff; }
+.cnt-btn:hover,  .news-cnt-btn:hover  { border-color: var(--primary); color: var(--primary); }
+.cnt-btn.active, .news-cnt-btn.active { border-color: var(--primary); background: var(--primary); color: #fff; }
 
 .cnt-custom { display: flex; align-items: center; gap: .3rem; margin-left: .25rem; }
 .input-sm {
