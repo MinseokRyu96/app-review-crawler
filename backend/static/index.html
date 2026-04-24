@@ -59,32 +59,19 @@
         </button>
       </section>
 
-      <!-- 진행 상태 -->
-      <section id="status-sec" class="card hidden">
-        <div class="status-head">
-          <h2 class="section-title" style="margin-bottom:0">진행 상태</h2>
-          <span id="status-badge" class="badge"></span>
-        </div>
-        <div class="progress-track">
-          <div id="progress-fill" class="progress-fill"></div>
-        </div>
-        <p id="status-msg" class="status-msg"></p>
-        <div id="dl-row" class="dl-row hidden">
-          <button class="btn btn-outline" onclick="downloadFile()">
-            ⬇ 텍스트 파일 다운로드
-          </button>
-          <button id="insights-btn" class="btn btn-insights" onclick="requestInsights()">
-            ✨ AI 인사이트 분석
-          </button>
+      <!-- 로딩 -->
+      <section id="loading-sec" class="card hidden">
+        <div class="loading-inner">
+          <div class="spinner-lg"></div>
+          <p class="loading-msg">리뷰를 수집하고 있습니다...</p>
+          <p class="loading-sub">잠시만 기다려주세요. 개수에 따라 수초~수십초 소요될 수 있습니다.</p>
         </div>
       </section>
 
       <!-- 인사이트 -->
       <section id="insights-sec" class="card insights-card hidden">
         <div class="insights-head">
-          <h2 class="section-title" style="margin-bottom:0">
-            ✨ AI 인사이트 분석
-          </h2>
+          <h2 class="section-title" style="margin-bottom:0">✨ AI 인사이트 분석</h2>
           <span id="insights-badge" class="badge"></span>
         </div>
         <div id="insights-loading" class="insights-loading hidden">
@@ -113,13 +100,13 @@
             </select>
           </div>
         </div>
-        <div id="reviews-list"></div>
-      </section>
 
-      <!-- 최근 기록 -->
-      <section class="recent">
-        <h3 class="recent-title">최근 크롤링 기록</h3>
-        <div id="jobs-list"></div>
+        <div class="dl-row">
+          <button class="btn btn-outline" onclick="downloadFile()">⬇ 텍스트 파일 다운로드</button>
+          <button id="insights-btn" class="btn btn-insights" onclick="requestInsights()">✨ AI 인사이트 분석</button>
+        </div>
+
+        <div id="reviews-list"></div>
       </section>
     </main>
   </div>

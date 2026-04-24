@@ -1,20 +1,30 @@
-import uuid
 import os
-from typing import List, Optional
-
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import PlainTextResponse
-from sqlalchemy.orm import Session
-
-from models.database import get_db, CrawlJob, Review
-from models.schemas import CrawlRequest, JobResponse, ReviewResponse
-from tasks.crawl_tasks import run_crawl, run_insights, detect_store, _build_txt
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 router = APIRouter()
 
 
-@router.post("/crawl", response_model=JobResponse)
-def start_crawl(request: CrawlRequest, db: Session = Depends(get_db)):
+class CrawlRequest(BaseModel):
+    url: str
+    count: int
+
+
+class InsightsRequest(BaseModel):
+    reviews: list
+    store: str
+
+
+def detect_store(url: str) -> str:
+    if "apps.apple.com" in url or "itunes.apple.com" in url:
+        return "appstore"
+    if "play.google.com" in url:
+        return "playstore"
+    return "unknown"
+
+
+@router.post("/crawl")
+def crawl(request: CrawlRequest):
     store = detect_store(request.url)
     if store == "unknown":
         raise HTTPException(
@@ -24,106 +34,59 @@ def start_crawl(request: CrawlRequest, db: Session = Depends(get_db)):
     if not (1 <= request.count <= 500):
         raise HTTPException(status_code=400, detail="크롤링 개수는 1~500 사이여야 합니다.")
 
-    job_id = str(uuid.uuid4())
-    job = CrawlJob(
-        id=job_id,
-        url=request.url,
-        store=store,
-        count=request.count,
-        status="pending",
+    try:
+        if store == "appstore":
+            from crawlers.appstore import fetch_reviews
+        else:
+            from crawlers.playstore import fetch_reviews
+
+        reviews = fetch_reviews(request.url, request.count)
+        return {"store": store, "reviews": reviews, "total": len(reviews)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/insights")
+def get_insights(request: InsightsRequest):
+    import google.generativeai as genai
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="GEMINI_API_KEY가 설정되지 않았습니다.")
+
+    negative = [r for r in request.reviews if r.get("rating", 5) <= 2]
+    if not negative:
+        return {"insights": "부정적인 리뷰(1~2점)가 없습니다. 전반적으로 긍정적인 평가를 받고 있습니다! 🎉"}
+
+    store_name = "앱스토어" if request.store == "appstore" else "플레이스토어"
+    reviews_text = "\n".join(f"[{r['rating']}점] {r['content']}" for r in negative[:80])
+
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(
+        model_name="gemini-1.5-flash",
+        system_instruction=(
+            "당신은 앱 서비스 개선 전문가입니다. "
+            "사용자 리뷰를 분석해 팀이 바로 행동할 수 있는 구체적인 인사이트를 제공합니다. "
+            "반드시 한국어로 답변하세요."
+        ),
     )
-    db.add(job)
-    db.commit()
-    db.refresh(job)
 
-    run_crawl.delay(job_id, request.url, request.count)
-    return job
-
-
-@router.get("/jobs", response_model=List[JobResponse])
-def list_jobs(db: Session = Depends(get_db)):
-    return (
-        db.query(CrawlJob)
-        .order_by(CrawlJob.created_at.desc())
-        .limit(30)
-        .all()
+    prompt = (
+        f"아래는 {store_name}에 올라온 부정적 리뷰 {len(negative)}개입니다.\n\n"
+        f"{reviews_text}\n\n"
+        "다음 형식으로 분석해 주세요.\n\n"
+        "## 🔴 핵심 불만 카테고리\n"
+        "각 카테고리명, 해당 리뷰 비율, 대표 사례 1~2개\n\n"
+        "## 📌 이슈별 요약\n"
+        "각 카테고리의 구체적인 문제점\n\n"
+        "## ✅ 개선 제안 (우선순위 순)\n"
+        "팀이 즉시 실행할 수 있는 3~5가지 액션 아이템"
     )
 
-
-@router.get("/jobs/{job_id}", response_model=JobResponse)
-def get_job(job_id: str, db: Session = Depends(get_db)):
-    job = db.query(CrawlJob).filter(CrawlJob.id == job_id).first()
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return job
-
-
-@router.get("/jobs/{job_id}/reviews", response_model=List[ReviewResponse])
-def get_reviews(job_id: str, db: Session = Depends(get_db)):
-    return db.query(Review).filter(Review.job_id == job_id).all()
-
-
-@router.post("/jobs/{job_id}/insights")
-def request_insights(job_id: str, db: Session = Depends(get_db)):
-    job = db.query(CrawlJob).filter(CrawlJob.id == job_id).first()
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    if job.status != "done":
-        raise HTTPException(status_code=400, detail="크롤링이 완료된 후 인사이트를 요청할 수 있습니다.")
-    if job.insights_status in ("running", "pending"):
-        raise HTTPException(status_code=400, detail="인사이트 분석이 이미 진행 중입니다.")
-
-    job.insights_status = "pending"
-    db.commit()
-
-    run_insights.delay(job_id)
-    return {"message": "인사이트 분석을 시작했습니다."}
-
-
-@router.get("/jobs/{job_id}/download")
-def download_reviews(job_id: str, db: Session = Depends(get_db)):
-    job = db.query(CrawlJob).filter(CrawlJob.id == job_id).first()
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    if job.status != "done":
-        raise HTTPException(status_code=400, detail="크롤링이 완료된 후 다운로드할 수 있습니다.")
-
-    reviews = db.query(Review).filter(Review.job_id == job_id).all()
-    content = _build_txt(reviews, job.url, job.store)
-
-    return PlainTextResponse(
-        content=content,
-        headers={"Content-Disposition": f'attachment; filename="reviews_{job_id[:8]}.txt"'},
-        media_type="text/plain; charset=utf-8",
-    )
+    response = model.generate_content(prompt)
+    return {"insights": response.text}
 
 
 @router.get("/health")
-def health_check():
-    """DB / Redis 연결 상태 확인용 진단 엔드포인트."""
-    result = {"db": "fail", "redis": "fail", "redis_url_scheme": ""}
-
-    # DB 확인
-    try:
-        from models.database import engine
-        import sqlalchemy
-        with engine.connect() as conn:
-            conn.execute(sqlalchemy.text("SELECT 1"))
-        result["db"] = "ok"
-    except Exception as e:
-        result["db_error"] = str(e)[:200]
-
-    # Redis 확인
-    try:
-        import redis as redis_lib
-        r = redis_lib.from_url(
-            os.getenv("REDIS_URL", "redis://localhost:6379/0"),
-            ssl_cert_reqs=None,
-        )
-        r.ping()
-        result["redis"] = "ok"
-    except Exception as e:
-        result["redis_error"] = str(e)[:200]
-
-    result["redis_url_scheme"] = os.getenv("REDIS_URL", "")[:20]
-    return result
+def health():
+    return {"status": "ok"}
