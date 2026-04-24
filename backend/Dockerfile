@@ -38,4 +38,4 @@ RUN playwright install chromium
 
 COPY . .
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["celery", "-A", "tasks.celery_app", "worker", "--loglevel=info", "--pool=solo"]
