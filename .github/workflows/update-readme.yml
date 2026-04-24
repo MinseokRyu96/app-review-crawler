@@ -19,8 +19,26 @@ jobs:
 
       - name: Update last updated badge
         run: |
-          DATE=$(date -u '+%Y--%m--%d')
-          sed -i "s|!\[Last Updated\](https://img.shields.io/badge/updated-[^)]*)|![Last Updated](https://img.shields.io/badge/updated-${DATE}-blue)|" README.md
+          python3 - <<'EOF'
+          import re, datetime, pathlib
+
+          readme = pathlib.Path("README.md")
+          content = readme.read_text()
+
+          date = datetime.datetime.utcnow().strftime("%Y--%m--%d")
+          new_badge = f"![Last Updated](https://img.shields.io/badge/updated-{date}-blue)"
+          updated = re.sub(
+              r'!\[Last Updated\]\(https://img\.shields\.io/badge/updated-[^)]+\)',
+              new_badge,
+              content,
+          )
+
+          if updated != content:
+              readme.write_text(updated)
+              print(f"Updated badge to {date}")
+          else:
+              print("Badge pattern not found — skipping")
+          EOF
 
       - name: Commit if changed
         run: |
