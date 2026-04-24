@@ -1,9 +1,0 @@
-# Railway — Celery 워커 전용 (웹 서버는 Vercel)
-[build]
-builder = "dockerfile"
-dockerfilePath = "backend/Dockerfile"
-dockerContext  = "backend"
-
-[deploy]
-startCommand = "celery -A tasks.celery_app worker --loglevel=info --pool=solo"
-restartPolicyType = "on_failure"
