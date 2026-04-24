@@ -163,6 +163,54 @@ body {
 .tab:hover  { background: var(--bg); color: var(--text); }
 .tab.active { background: var(--primary); color: #fff; }
 
+/* ── Rating chart ── */
+.rating-chart { margin-bottom: 1.25rem; }
+.chart-wrap   { display: flex; flex-direction: column; gap: .45rem; }
+.chart-title  { font-size: .8rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .3rem; }
+
+.chart-row {
+  display: grid;
+  grid-template-columns: 36px 1fr 64px;
+  align-items: center;
+  gap: .6rem;
+}
+.chart-label {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.chart-star { font-size: .9rem; }
+
+.chart-bar-wrap {
+  background: var(--bg);
+  border-radius: 99px;
+  height: 10px;
+  overflow: hidden;
+}
+.chart-bar {
+  height: 100%;
+  border-radius: 99px;
+  transition: width .6s ease;
+  min-width: 2px;
+}
+
+.chart-count {
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--text);
+  text-align: right;
+  white-space: nowrap;
+}
+.chart-pct {
+  font-size: .74rem;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 3px;
+}
+
 /* ── News items ── */
 .news-item {
   display: flex;

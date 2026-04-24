@@ -92,12 +92,46 @@ async function startCrawl() {
   }
 }
 
+function renderRatingChart(reviews) {
+  const total = reviews.length;
+  if (!total) { document.getElementById('rating-chart').innerHTML = ''; return; }
+
+  const counts = [5, 4, 3, 2, 1].map(star => ({
+    star,
+    count: reviews.filter(r => r.rating === star).length,
+  }));
+  const max = Math.max(...counts.map(c => c.count), 1);
+
+  const colors = { 5: '#22c55e', 4: '#86efac', 3: '#fbbf24', 2: '#fb923c', 1: '#ef4444' };
+
+  document.getElementById('rating-chart').innerHTML = `
+    <div class="chart-wrap">
+      <div class="chart-title">별점 분포</div>
+      ${counts.map(({ star, count }) => {
+        const pct  = Math.round((count / total) * 100);
+        const barW = Math.round((count / max) * 100);
+        return `
+          <div class="chart-row">
+            <div class="chart-label">
+              <span class="chart-star" style="color:${colors[star]}">★</span>
+              <span>${star}</span>
+            </div>
+            <div class="chart-bar-wrap">
+              <div class="chart-bar" style="width:${barW}%; background:${colors[star]}"></div>
+            </div>
+            <div class="chart-count">${count.toLocaleString()}<span class="chart-pct">${pct}%</span></div>
+          </div>`;
+      }).join('')}
+    </div>`;
+}
+
 function renderReviews(reviews) {
   const sec   = document.getElementById('reviews-sec');
   const list  = document.getElementById('reviews-list');
   const badge = document.getElementById('rev-count');
   sec.classList.remove('hidden');
   badge.textContent = reviews.length.toLocaleString();
+  renderRatingChart(currentReviews);
 
   if (!reviews.length) { list.innerHTML = '<p class="no-data">수집된 리뷰가 없습니다.</p>'; return; }
 
