@@ -50,9 +50,9 @@ def crawl(request: CrawlRequest):
 def get_insights(request: InsightsRequest):
     import httpx
 
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=400, detail="GEMINI_API_KEY가 설정되지 않았습니다.")
+        raise HTTPException(status_code=400, detail="GROQ_API_KEY가 설정되지 않았습니다.")
 
     negative = [r for r in request.reviews if r.get("rating", 5) <= 2]
     if not negative:
@@ -73,29 +73,34 @@ def get_insights(request: InsightsRequest):
         "팀이 즉시 실행할 수 있는 3~5가지 액션 아이템"
     )
 
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/models"
-        f"/gemini-2.0-flash:generateContent?key={api_key}"
-    )
     payload = {
-        "system_instruction": {
-            "parts": [{"text": (
-                "당신은 앱 서비스 개선 전문가입니다. "
-                "사용자 리뷰를 분석해 팀이 바로 행동할 수 있는 구체적인 인사이트를 제공합니다. "
-                "반드시 한국어로 답변하세요."
-            )}]
-        },
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": 2048},
+        "model": "llama-3.3-70b-versatile",
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "당신은 앱 서비스 개선 전문가입니다. "
+                    "사용자 리뷰를 분석해 팀이 바로 행동할 수 있는 구체적인 인사이트를 제공합니다. "
+                    "반드시 한국어로 답변하세요."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
+        "max_tokens": 2048,
     }
 
     try:
-        resp = httpx.post(url, json=payload, timeout=55)
+        resp = httpx.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            json=payload,
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=55,
+        )
         resp.raise_for_status()
-        text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        text = resp.json()["choices"][0]["message"]["content"]
         return {"insights": text}
     except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=502, detail=f"Gemini API 오류: {e.response.text[:200]}")
+        raise HTTPException(status_code=502, detail=f"Groq API 오류: {e.response.text[:200]}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
