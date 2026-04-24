@@ -1,4 +1,5 @@
 import uuid
+import os
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -95,3 +96,34 @@ def download_reviews(job_id: str, db: Session = Depends(get_db)):
         headers={"Content-Disposition": f'attachment; filename="reviews_{job_id[:8]}.txt"'},
         media_type="text/plain; charset=utf-8",
     )
+
+
+@router.get("/health")
+def health_check():
+    """DB / Redis 연결 상태 확인용 진단 엔드포인트."""
+    result = {"db": "fail", "redis": "fail", "redis_url_scheme": ""}
+
+    # DB 확인
+    try:
+        from models.database import engine
+        import sqlalchemy
+        with engine.connect() as conn:
+            conn.execute(sqlalchemy.text("SELECT 1"))
+        result["db"] = "ok"
+    except Exception as e:
+        result["db_error"] = str(e)[:200]
+
+    # Redis 확인
+    try:
+        import redis as redis_lib
+        r = redis_lib.from_url(
+            os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+            ssl_cert_reqs=None,
+        )
+        r.ping()
+        result["redis"] = "ok"
+    except Exception as e:
+        result["redis_error"] = str(e)[:200]
+
+    result["redis_url_scheme"] = os.getenv("REDIS_URL", "")[:20]
+    return result

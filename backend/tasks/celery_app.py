@@ -1,11 +1,16 @@
 from celery import Celery
 import os
+import ssl
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-# Upstash는 rediss:// (TLS) 를 사용 — broker_use_ssl 필요
 _use_ssl = REDIS_URL.startswith("rediss://")
-_ssl_opts = {"ssl_cert_reqs": None} if _use_ssl else {}
+_ssl_opts = {
+    "ssl_keyfile": None,
+    "ssl_certfile": None,
+    "ssl_ca_certs": None,
+    "ssl_cert_reqs": ssl.CERT_NONE,
+} if _use_ssl else {}
 
 celery_app = Celery(
     "review_crawler",
@@ -22,6 +27,6 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
     worker_max_tasks_per_child=10,
-    broker_use_ssl=_ssl_opts if _use_ssl else None,
-    redis_backend_use_ssl=_ssl_opts if _use_ssl else None,
+    broker_use_ssl=_ssl_opts or None,
+    redis_backend_use_ssl=_ssl_opts or None,
 )
