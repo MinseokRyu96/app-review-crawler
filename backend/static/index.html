@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>앱 리뷰 크롤러</title>
+  <title>크롤러</title>
   <link rel="stylesheet" href="/static/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
@@ -12,28 +12,31 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <span class="logo-icon">📱</span>
-          <span class="logo-text">앱 리뷰 크롤러</span>
+          <span class="logo-icon">🔍</span>
+          <span class="logo-text">크롤러</span>
         </div>
-        <p class="header-sub">앱스토어 & 플레이스토어 리뷰 자동 수집</p>
+        <p class="header-sub">앱 리뷰 & 뉴스 기사 자동 수집 + AI 인사이트</p>
       </div>
     </header>
 
     <main class="main">
-      <!-- 입력 폼 -->
-      <section class="card">
+
+      <!-- 탭 -->
+      <div class="tabs">
+        <button class="tab active" id="tab-review" onclick="switchTab('review')">📱 앱 리뷰</button>
+        <button class="tab"        id="tab-news"   onclick="switchTab('news')">📰 뉴스 기사</button>
+      </div>
+
+      <!-- ── 앱 리뷰 입력 ── -->
+      <section id="review-input" class="card">
         <h2 class="section-title">크롤링 설정</h2>
 
         <div class="field">
           <label class="label" for="url">앱 URL</label>
           <div class="url-row">
-            <input
-              id="url"
-              type="text"
-              class="input"
+            <input id="url" type="text" class="input"
               placeholder="https://apps.apple.com/... 또는 https://play.google.com/..."
-              autocomplete="off"
-            />
+              autocomplete="off" />
             <span id="store-tag" class="store-tag"></span>
           </div>
           <p class="hint">앱스토어 또는 플레이스토어 앱 상세 페이지 URL을 붙여넣으세요.</p>
@@ -48,14 +51,45 @@
             <button class="cnt-btn" data-v="200">200</button>
             <button class="cnt-btn" data-v="500">500</button>
             <div class="cnt-custom">
-              <input id="count" type="number" class="input-sm" value="50" min="1" max="500" />
+              <input id="review-count" type="number" class="input-sm" value="50" min="1" max="500" />
               <span class="cnt-unit">개</span>
             </div>
           </div>
         </div>
 
-        <button id="start-btn" class="btn btn-primary" onclick="startCrawl()">
+        <button id="review-start-btn" class="btn btn-primary" onclick="startCrawl()">
           크롤링 시작
+        </button>
+      </section>
+
+      <!-- ── 뉴스 입력 ── -->
+      <section id="news-input" class="card hidden">
+        <h2 class="section-title">뉴스 검색 설정</h2>
+
+        <div class="field">
+          <label class="label" for="keyword">검색 키워드</label>
+          <input id="keyword" type="text" class="input"
+            placeholder="예: 인공지능, 삼성전자, 금리 인상 ..."
+            autocomplete="off" />
+          <p class="hint">Google 뉴스에서 해당 키워드 관련 최신 기사를 수집합니다.</p>
+        </div>
+
+        <div class="field">
+          <label class="label">수집 개수</label>
+          <div class="count-row">
+            <button class="news-cnt-btn" data-v="10">10</button>
+            <button class="news-cnt-btn active" data-v="30">30</button>
+            <button class="news-cnt-btn" data-v="50">50</button>
+            <button class="news-cnt-btn" data-v="100">100</button>
+            <div class="cnt-custom">
+              <input id="news-count" type="number" class="input-sm" value="30" min="1" max="100" />
+              <span class="cnt-unit">개</span>
+            </div>
+          </div>
+        </div>
+
+        <button id="news-start-btn" class="btn btn-primary" onclick="startNewsCrawl()">
+          뉴스 수집 시작
         </button>
       </section>
 
@@ -63,8 +97,8 @@
       <section id="loading-sec" class="card hidden">
         <div class="loading-inner">
           <div class="spinner-lg"></div>
-          <p class="loading-msg">리뷰를 수집하고 있습니다...</p>
-          <p class="loading-sub">잠시만 기다려주세요. 개수에 따라 수초~수십초 소요될 수 있습니다.</p>
+          <p class="loading-msg" id="loading-msg">수집하고 있습니다...</p>
+          <p class="loading-sub">잠시만 기다려주세요.</p>
         </div>
       </section>
 
@@ -76,17 +110,16 @@
         </div>
         <div id="insights-loading" class="insights-loading hidden">
           <div class="spinner"></div>
-          <p>부정 리뷰를 분석하고 있습니다...</p>
+          <p>분석하고 있습니다...</p>
         </div>
         <div id="insights-body" class="insights-body"></div>
       </section>
 
-      <!-- 리뷰 목록 -->
+      <!-- 앱 리뷰 결과 -->
       <section id="reviews-sec" class="card hidden">
         <div class="reviews-head">
           <h2 class="section-title" style="margin-bottom:0">
-            수집된 리뷰
-            <span id="rev-count" class="cnt-badge">0</span>
+            수집된 리뷰 <span id="rev-count" class="cnt-badge">0</span>
           </h2>
           <div class="filter-row">
             <label class="label" style="margin:0">별점 필터</label>
@@ -100,14 +133,27 @@
             </select>
           </div>
         </div>
-
         <div class="dl-row">
-          <button class="btn btn-outline" onclick="downloadFile()">⬇ 텍스트 파일 다운로드</button>
+          <button class="btn btn-outline" onclick="downloadReviews()">⬇ TXT 다운로드</button>
           <button id="insights-btn" class="btn btn-insights" onclick="requestInsights()">✨ AI 인사이트 분석</button>
         </div>
-
         <div id="reviews-list"></div>
       </section>
+
+      <!-- 뉴스 결과 -->
+      <section id="news-sec" class="card hidden">
+        <div class="reviews-head">
+          <h2 class="section-title" style="margin-bottom:0">
+            수집된 기사 <span id="news-count-badge" class="cnt-badge">0</span>
+          </h2>
+        </div>
+        <div class="dl-row">
+          <button class="btn btn-outline" onclick="downloadNews()">⬇ TXT 다운로드</button>
+          <button id="news-insights-btn" class="btn btn-insights" onclick="requestNewsInsights()">✨ AI 인사이트 분석</button>
+        </div>
+        <div id="news-list"></div>
+      </section>
+
     </main>
   </div>
 
