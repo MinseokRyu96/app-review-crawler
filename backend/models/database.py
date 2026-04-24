@@ -4,13 +4,42 @@ from datetime import datetime
 import os
 
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://reviewer:reviewpass@localhost:5432/reviewdb"
-)
+def _make_engine():
+    url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL") or ""
+    if not url:
+        known = [k for k in os.environ if "DB" in k or "POSTGRES" in k or "SQL" in k]
+        raise RuntimeError(
+            f"DATABASE_URL is not set or empty. "
+            f"Related env keys found: {known}. "
+            f"Total env keys: {len(os.environ)}"
+        )
+    return create_engine(url)
 
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+_engine = None
+_SessionLocal = None
+
+
+def _get_engine():
+    global _engine
+    if _engine is None:
+        _engine = _make_engine()
+    return _engine
+
+
+def get_session_local():
+    global _SessionLocal
+    if _SessionLocal is None:
+        _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_get_engine())
+    return _SessionLocal
+
+
+# 하위 호환 — 기존 코드가 SessionLocal을 직접 import하는 경우
+class _LazySessionLocal:
+    def __call__(self, *args, **kwargs):
+        return get_session_local()(*args, **kwargs)
+
+SessionLocal = _LazySessionLocal()
 
 
 class Base(DeclarativeBase):
@@ -22,14 +51,14 @@ class CrawlJob(Base):
 
     id = Column(String, primary_key=True)
     url = Column(String, nullable=False)
-    store = Column(String, nullable=False)   # 'appstore' | 'playstore'
+    store = Column(String, nullable=False)
     count = Column(Integer, nullable=False)
-    status = Column(String, default="pending")  # pending | running | done | failed
+    status = Column(String, default="pending")
     total_reviews = Column(Integer, default=0)
     error_message = Column(Text, nullable=True)
     export_filename = Column(String, nullable=True)
     insights = Column(Text, nullable=True)
-    insights_status = Column(String, default="none")  # none | pending | running | done | failed
+    insights_status = Column(String, default="none")
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
 
@@ -50,8 +79,8 @@ class Review(Base):
 
 
 def create_tables():
+    engine = _get_engine()
     Base.metadata.create_all(bind=engine)
-    # 기존 테이블에 새 컬럼 추가 (migrate)
     with engine.connect() as conn:
         for col, definition in [
             ("insights",        "TEXT"),
